@@ -1,0 +1,89 @@
+name: cucm-monitoring
+services:
+  influxdb2:
+    image: influxdb:latest
+    restart: always
+    ports:
+      - 8086:8086
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_USERNAME}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_PASSWORD} 
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_TOKEN} 
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ORG}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_INIT_BUCKET}
+    healthcheck:
+      test: "curl -f http://influxdb2:8086/ping"
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - ./influxdb-provisioning/scripts:/docker-entrypoint-initdb.d
+      - type: volume
+        source: influxdb2-data
+        target: /var/lib/influxdb2
+      - type: volume
+        source: influxdb2-config
+        target: /etc/influxdb2
+  perfmon_15:
+    image: sieteunoseis/perfmon-influx-exporter:latest
+    restart: always
+    environment:
+      - INFLUXDB_BUCKET=cisco_perfmon
+      - PM_INTERVAL=15000
+      - PM_OBJECT_COLLECT_ALL=Cisco AXL Tomcat Connector,Cisco AXL Tomcat JVM,Cisco AXL Tomcat Web Application,Cisco AXL Web Service,Cisco CallManager,Cisco SIP,Memory,Network Interface,Number of Replicates Created and State of Replication,Partition,System
+      - PM_OBJECT_SESSION_PERCENTAGE=Memory,Processor,Partition
+      - PM_OBJECT_SESSION_PERCENTAGE_SLEEP=15000
+    command:
+      - start
+    volumes:
+      - ./data:/usr/src/app/data
+    env_file:
+      - .env
+    depends_on:
+      influxdb2:
+        condition: service_healthy
+  risport_300:
+    image: sieteunoseis/risport-influx-exporter:latest
+    restart: always
+    environment:
+      - INFLUXDB_BUCKET=cisco_risport
+    env_file:
+      - .env
+    depends_on:
+      influxdb2:
+        condition: service_healthy
+      perfmon_15:
+        condition: service_started
+  telegraf:
+    image: telegraf:latest
+    depends_on:
+      influxdb2:
+        condition: service_healthy
+    volumes:
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      - ./telegraf/mibs:/usr/share/snmp/mibs
+    env_file:
+      - .env
+  grafana:
+    image: grafana/grafana:latest
+    restart: always
+    ports:
+      - 3000:3000
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./grafana-provisioning/:/etc/grafana/provisioning
+    depends_on:
+      influxdb2:
+        condition: service_healthy
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USERNAME}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_INIT_BUCKET}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN}
+volumes:
+  influxdb2-data:
+  influxdb2-config:
+  grafana-storage:
+  
