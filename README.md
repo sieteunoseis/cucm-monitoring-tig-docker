@@ -10,6 +10,8 @@ Multi-container Docker app built from the following services:
 
 Useful for quickly setting up a monitoring stack for Cisco Unified Communications Manager.
 
+![Sample Graph](https://github.com/sieteunoseis/cucm-monitoring-tig-docker/blob/6c6abff971c746f88fa48287110c44de300310de/screenshots/grafana-cucm-system-health.png)
+
 ## Quick Start
 
 To start the app:
